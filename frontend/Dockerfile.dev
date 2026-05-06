@@ -11,8 +11,9 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}" \
 
 WORKDIR /app
 
-# Give the node user ownership of the workdir before installing
-RUN chown node:node /app
+# Install tini as root before dropping privileges
+RUN apk add --no-cache tini \
+    && chown node:node /app
 
 # Switch early — everything from here runs as node
 USER node
@@ -26,4 +27,11 @@ RUN npm ci --prefer-offline
 COPY --chown=node:node . .
 
 EXPOSE 5173
+
+# Orchestrators use this to know the app is actually ready
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:5173/ || exit 1
+
+# tini as PID 1 — handles signal forwarding and zombie reaping
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
