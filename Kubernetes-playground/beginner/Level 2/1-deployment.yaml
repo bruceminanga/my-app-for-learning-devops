@@ -23,7 +23,7 @@ spec:
         image: busybox
         command: ["sh", "-c", "chown -R 1000:2000 /usr/share/app/data && chmod -R 775 /usr/share/app/data"]
         volumeMounts:
-        - name: task-pv-storage
+        - name: app-data-storage
           mountPath: "/usr/share/app/data"
 
       containers:
@@ -42,16 +42,15 @@ spec:
             cpu: "200m"
             memory: "256Mi"
         volumeMounts:
-        - name: postgres-credentials-volume
-          mountPath: "/etc/postgres-secrets"
-          readOnly: true
-        - name: task-pv-storage
-          mountPath: "/usr/share/app/data"
-
+            - name: postgres-credentials-volume
+              mountPath: "/etc/postgres-secrets"
+              readOnly: true
+            - name: app-data-storage
+              mountPath: "/usr/share/app/data"
       volumes:
-      - name: postgres-credentials-volume
-        secret:
-          secretName: postgres-credentials-secret
-      - name: task-pv-storage
-        persistentVolumeClaim:
-          claimName: task-pv-claim
+        - name: postgres-credentials-volume
+          secret:
+            secretName: postgres-credentials-secret
+        - name: app-data-storage
+          persistentVolumeClaim:
+            claimName: my-app-data-pvc
