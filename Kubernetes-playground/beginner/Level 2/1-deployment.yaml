@@ -6,9 +6,24 @@ metadata:
     app: web
 spec:
   replicas: 3
+
+  # -----------------------------------------------
+  # PILLAR 5 — Rolling Update Strategy
+  # maxUnavailable: 0  → never kill a pod until its replacement is Ready
+  # maxSurge: 1        → allow one extra pod above replicas=3 during rollout
+  # Without this, Kubernetes defaults (25%/25%) may terminate pods before
+  # replacements pass their readiness probe, creating a capacity gap.
+  # -----------------------------------------------
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
   selector:
     matchLabels:
       app: web
+
   template:
     metadata:
       labels:
@@ -16,6 +31,13 @@ spec:
     spec:
       securityContext:
         fsGroup: 2000
+
+      # -----------------------------------------------
+      # PILLAR 4 — terminationGracePeriodSeconds
+      # Formula: preStop sleep (15s) + app drain time (≤20s) + headroom
+      # 15 + 20 + 10 = 45s  ← matches what you already had, now correct
+      # The clock starts BEFORE preStop runs, so this must cover both.
+      # -----------------------------------------------
       terminationGracePeriodSeconds: 45
 
       initContainers:
@@ -51,6 +73,44 @@ spec:
             limits:
               cpu: "200m"
               memory: "256Mi"
+
+          # -----------------------------------------------
+          # PILLAR 2 — SIGTERM handling (app-level)
+          # paulbouwer/hello-kubernetes already handles SIGTERM correctly.
+          # For your real Node.js app, ensure your code does:
+          #
+          #   process.on('SIGTERM', () => {
+          #     server.close(() => {          // stop accepting new requests
+          #       db.end();                   // close DB connections
+          #       process.exit(0);            // clean exit
+          #     });
+          #   });
+          #
+          # Also in your Dockerfile, use exec form (not shell form):
+          #   CMD ["node", "server.js"]     ← CORRECT (app is PID 1)
+          #   CMD npm start                 ← WRONG  (shell absorbs SIGTERM)
+          #
+          # If you use a multi-process entrypoint script, add tini:
+          #   ENTRYPOINT ["/tini", "--"]
+          # -----------------------------------------------
+
+          # -----------------------------------------------
+          # PILLAR 3 — preStop hook (infrastructure fix)
+          # Kubernetes sends SIGTERM AND begins removing the pod IP from
+          # Service Endpoints simultaneously. The endpoint removal is
+          # asynchronous — it takes a few seconds to propagate to kube-proxy
+          # and your Ingress controller across the cluster.
+          #
+          # The sleep 15 buys that propagation time. During those 15 seconds:
+          #   - The pod keeps serving traffic normally
+          #   - kube-proxy finishes deregistering the pod's IP
+          # After the sleep, SIGTERM fires and the app drains cleanly.
+          # -----------------------------------------------
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 15"]
+
           startupProbe:
             httpGet:
               path: /
@@ -58,6 +118,15 @@ spec:
             failureThreshold: 12
             periodSeconds: 5
             timeoutSeconds: 3
+
+          # -----------------------------------------------
+          # PILLAR 1 — Readiness Probe
+          # Already present and well-tuned in your original manifest.
+          # This is what controls whether Kubernetes routes traffic TO
+          # this pod (and also triggers endpoint removal when it fails).
+          # successThreshold: 2 means the pod must pass twice before
+          # receiving traffic — good protection against flappy starts.
+          # -----------------------------------------------
           readinessProbe:
             httpGet:
               path: /
@@ -67,6 +136,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 2
             successThreshold: 2
+
           livenessProbe:
             httpGet:
               path: /
@@ -76,6 +146,7 @@ spec:
             timeoutSeconds: 2
             failureThreshold: 3
             successThreshold: 1
+
           volumeMounts:
             - name: postgres-credentials-volume
               mountPath: "/etc/postgres-secrets"
@@ -102,6 +173,20 @@ spec:
             limits:
               memory: "64Mi"
               cpu: "50m"
+
+          # -----------------------------------------------
+          # SIDECAR preStop hook
+          # The sidecar writes to the shared volume every 5s. Without a
+          # preStop hook, Kubernetes may SIGKILL it mid-write, leaving a
+          # partial or corrupt index.html that the main container is
+          # actively serving. The sleep gives the main container time to
+          # finish its own drain (15s) before the sidecar is killed.
+          # -----------------------------------------------
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 15"]
+
           volumeMounts:
             - name: app-data-storage
               mountPath: "/usr/share/app/data"
