@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  labels:
+    app: web
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: db-migrate
+    spec:
+      securityContext:
+        fsGroup: 2000
+      restartPolicy: OnFailure
+      containers:
+      - name: db-migrate
+        image: busybox
+        command: ["sh", "-c", "echo Migration started! && sleep 5 && echo Migration complete!"]

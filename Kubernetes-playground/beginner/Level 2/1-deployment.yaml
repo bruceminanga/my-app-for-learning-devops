@@ -14,39 +14,98 @@ spec:
       labels:
         app: web
     spec:
-      securityContext:         
-        fsGroup: 2000  
-      
-      # Add this initContainers block
+      securityContext:
+        fsGroup: 2000
+      terminationGracePeriodSeconds: 45
+
       initContainers:
-      - name: fix-volume-permissions
-        image: busybox
-        command: ["sh", "-c", "chown -R 1000:2000 /usr/share/app/data && chmod -R 775 /usr/share/app/data"]
-        volumeMounts:
-        - name: app-data-storage
-          mountPath: "/usr/share/app/data"
+        - name: fix-volume-permissions
+          image: busybox
+          command: ["sh", "-c", "chown -R 1000:2000 /usr/share/app/data && chmod -R 775 /usr/share/app/data"]
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: app-data-storage
+              mountPath: "/usr/share/app/data"
 
       containers:
-      - name: nodejs-app
-        image: paulbouwer/hello-kubernetes:1.10
-        ports:
-        - containerPort: 8080
-        envFrom:
+        # -----------------------------------------------
+        # MAIN CONTAINER: Node.js application
+        # -----------------------------------------------
+        - name: nodejs-app
+          image: paulbouwer/hello-kubernetes:1.10
+          ports:
+            - containerPort: 8080
+          envFrom:
             - configMapRef:
                 name: my-app-config
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
-          limits:
-            cpu: "200m"
-            memory: "256Mi"
-        volumeMounts:
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            failureThreshold: 12
+            periodSeconds: 5
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+            successThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+          volumeMounts:
             - name: postgres-credentials-volume
               mountPath: "/etc/postgres-secrets"
               readOnly: true
             - name: app-data-storage
               mountPath: "/usr/share/app/data"
+
+        # -----------------------------------------------
+        # SIDECAR CONTAINER: Dynamic content generator
+        # -----------------------------------------------
+        - name: sidecar-content-container
+          image: busybox:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              while true; do
+                echo "<h1>Hello from the Sidecar!</h1><p>The current time is: $(date)</p>" > /usr/share/app/data/index.html;
+                sleep 5;
+              done
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "64Mi"
+              cpu: "50m"
+          volumeMounts:
+            - name: app-data-storage
+              mountPath: "/usr/share/app/data"
+
       volumes:
         - name: postgres-credentials-volume
           secret:
