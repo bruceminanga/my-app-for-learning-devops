@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fruit-ingress-tls
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - fruit.example.com
+    secretName: fruit-tls-secret
+  rules:
+  - host: fruit.example.com
+    http:
+      paths:
+      - path: /apple
+        pathType: Prefix
+        backend:
+          service:
+            name: apple-service
+            port:
+              number: 80
+      - path: /banana
+        pathType: Prefix
+        backend:
+          service:
+            name: banana-service
+            port:
+              number: 80

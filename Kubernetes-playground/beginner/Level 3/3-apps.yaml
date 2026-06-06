@@ -1,0 +1,72 @@
+# --- APPLE DEPLOYMENT & SERVICE ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apple-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: apple
+  template:
+    metadata:
+      labels:
+        app: apple
+    spec:
+      containers:
+      - name: apple-app
+        image: hashicorp/http-echo
+        args:
+        - "-text=You have reached the APPLE application!"
+        ports:
+        - containerPort: 5678
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apple-service
+spec:
+  type: ClusterIP   # Internal only — no external IP needed.
+  ports:
+  - port: 80
+    targetPort: 5678
+  selector:
+    app: apple
+
+# --- BANANA DEPLOYMENT & SERVICE ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banana-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: banana
+  template:
+    metadata:
+      labels:
+        app: banana
+    spec:
+      containers:
+      - name: banana-app
+        image: hashicorp/http-echo
+        args:
+        - "-text=You have reached the BANANA application!"
+        ports:
+        - containerPort: 5678
+        
+        
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: banana-service
+spec:
+  type: ClusterIP   # Internal only — Ingress handles the external edge.
+  ports:
+  - port: 80
+    targetPort: 5678
+  selector:
+    app: banana
