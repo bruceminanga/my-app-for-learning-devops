@@ -1,0 +1,11 @@
+name: Shell Commands Runbook
+on: [push] # Triggers the pipeline on code push
+
+jobs:
+  execute-shell-commands:
+    runs-on: ubuntu-latest # The OS executing your commands
+
+    steps:
+      # Step 1: Get the code onto the runner
+      - name: Checkout Code
+        uses: actions/checkout@v4

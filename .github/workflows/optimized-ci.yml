@@ -1,0 +1,39 @@
+name: Optimized CI/CD Pipeline
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  # 1. PUSH EVENT WITH PATHS AND IGNORES
+  push:
+    branches-ignore:
+      - 'archived/**'       # Do not run on any branch starting with archived/
+    paths:
+      - 'src/**'            # Run if files in src/ change
+      - '!src/docs/**'      # BUT ignore if the change is in src/docs/
+
+  # 2. PULL REQUEST EVENT WITH BRANCHES AND PATHS-IGNORE
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main                # Only run when PR targets main
+    paths-ignore:
+      - '**/*.md'           # Do not run if the ONLY changes are markdown files
+      - 'LICENSE'           # Do not run if the ONLY change is the LICENSE file
+
+  # 3. MANUAL TRIGGER
+  workflow_dispatch:
+
+  # 4. SCHEDULED RUN (e.g., nightly security scan)
+  schedule:
+    - cron: '0 2 * * *'    # Every night at 2:00 AM UTC
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Execute Tests
+        run: echo "Running tests because the filters passed!"
