@@ -1,4 +1,4 @@
-# 🐳 My App for Learning Docker
+# 🐳 My App for Learning DevOps
 
 > **Containerization Excellence** — A production-grade Docker architecture built on the **7-Phase Mission** standard: secure, scalable, reproducible, and developer-friendly.
 
