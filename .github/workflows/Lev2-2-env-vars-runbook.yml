@@ -1,0 +1,54 @@
+name: Environment Variables Runbook
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual triggering
+
+# 1. WORKFLOW LEVEL
+# Available to EVERY job and EVERY step.
+env:
+  GLOBAL_GREETING: "Hello from the Workflow Level!"
+  SHARED_COLOR: "Blue" 
+
+jobs:
+  job_one:
+    runs-on: ubuntu-latest
+    # 2. JOB LEVEL (Job 1)
+    # Available to all steps in job_one, but NOT job_two
+    env:
+      JOB_NAME: "First Job"
+      SHARED_COLOR: "Green" # OVERRIDE: Shadows the Workflow Blue
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4 
+      - name: Print Inherited Variables
+        run: |
+          echo "Global Greeting: $GLOBAL_GREETING"
+          echo "Job Name: $JOB_NAME"
+          echo "Color is: $SHARED_COLOR" # Will print Green, not Blue!
+
+      - name: Step Level Override Demonstration
+        # 3. STEP LEVEL
+        # Available ONLY to this specific step.
+        # In real pipelines, replace "SuperSecret123" with ${{ secrets.MY_SECRET }}
+        env:
+          SHARED_COLOR: "Red" # OVERRIDE: Shadows Job and Workflow
+          STEP_SECRET: "${{ secrets.MY_SECRET }}" # ✅ Correct pattern — never hardcode real secrets
+        run: |
+          echo "Color for this step ONLY is: $SHARED_COLOR"
+          echo "Secret is injected and available to this step only."
+
+      - name: Verify Isolation
+        run: |
+          echo "Checking color again... It should be back to Green: $SHARED_COLOR"
+          echo "Trying to read step secret: $STEP_SECRET" # Will be empty! 
+      - name: Generate a dynamic build ID
+        run: |
+          echo "BUILD_ID=build-$(date +%s)" >> $GITHUB_ENV
+
+      - name: Use the dynamic build ID in a later step
+        run: |
+          echo "Current build identifier is: $BUILD_ID"
+
